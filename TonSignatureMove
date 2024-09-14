@@ -1,0 +1,60 @@
+module ContractAccount {
+
+    use std::signer;
+    use std::crypto::ed25519;
+    use std::vector;
+    use std::token::Token;
+    use std::account;
+
+    // Contract Account structure
+    struct ContractAccount {
+        pub_key: vector<u8>,   // ED25519 公钥
+        balance: u64,          // 账户中的余额
+    }
+
+    // Init contract account
+    public fun create_account(pub_key: vector<u8>, initial_balance: u64): ContractAccount {
+        ContractAccount {
+            pub_key,
+            balance: initial_balance,
+        }
+    }
+
+    // Ton proof signature verification
+    fun verify_signature(message: &vector<u8>, signature: &vector<u8>, pub_key: &vector<u8>): bool {
+        ed25519::verify(message, signature, pub_key)
+    }
+
+    // Verify signature and transfer 
+    public fun transfer(
+        account: &mut ContractAccount,
+        receiver: &signer::Signer,
+        amount: u64,
+        message: vector<u8>,         // data
+        signature: vector<u8>        // signature
+    ) acquires ContractAccount {
+        assert!(verify_signature(&message, &signature, &account.pub_key), 100); 
+
+        // Check balance
+        assert!(account.balance >= amount, 101);
+
+        // transfer
+        account.balance -= amount;
+        let receiver_address = signer::address_of(receiver);
+        Token::transfer(account, receiver_address, amount);
+    }
+
+    // Call contracts
+    public fun call_contract(
+        account: &mut ContractAccount,
+        contract_address: address,
+        function_name: &str,
+        args: vector<u8>,
+        message: vector<u8>,
+        signature: vector<u8>
+    ) acquires ContractAccount {
+        assert!(verify_signature(&message, &signature, &account.pub_key), 102); 
+        let call_data = bcs::to_bytes(&args);
+        account::call_contract(contract_address, function_name, call_data);
+    }
+}
